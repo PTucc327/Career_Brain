@@ -1,18 +1,16 @@
 import os
 from dotenv import load_dotenv
-# Corrected Imports for v0.10+
-from llama_index.core import VectorStoreIndex, Settings, StorageContext
+from llama_index.core import VectorStoreIndex, Settings
 from llama_index.readers.github import GithubRepositoryReader, GithubClient
 from llama_index.llms.ollama import Ollama
 from llama_index.embeddings.ollama import OllamaEmbedding
 
-# 1. Load your variables
+# Load keys
 load_dotenv()
 github_token = os.getenv("GITHUB_TOKEN")
 
-# 2. Setup LOCAL AI (Ollama) - No OpenAI needed!
-# This tells LlamaIndex to use the models you 'pulled' in the terminal
-Settings.llm = Ollama(model="llama3.2", request_timeout=120.0)
+# Setup Ollama (Local)
+Settings.llm = Ollama(model="llama3.2:1b", request_timeout=120.0)
 Settings.embed_model = OllamaEmbedding(model_name="nomic-embed-text")
 
 # 3. Initialize GitHub Client
@@ -22,7 +20,7 @@ github_client = GithubClient(github_token)
 repos = [
     {"owner": "PTucc327", "repo": "ChurnLens"},
     {"owner": "PTucc327", "repo": "Job_Market_Analysis"},
-    {"owner": "PTucc327", "repo": "NFL_Pass_Rush_Play_Prediction"}
+    {"owner": "PTucc327", "repo": "NFL_Pass_Rush_Play_Type_Classification"}
 ]
 
 all_docs = []
@@ -34,7 +32,7 @@ for repo in repos:
         github_client,
         owner=repo["owner"],
         repo=repo["repo"],
-        filter_file_extensions=([".py", ".ipynb", ".md"], GithubRepositoryReader.FilterType.INCLUDE)
+        filter_file_extensions=([".py", ".ipynb", ".md", ".r", ".Rmd"], GithubRepositoryReader.FilterType.INCLUDE)
     )
     all_docs.extend(loader.load_data(branch="main"))
 
