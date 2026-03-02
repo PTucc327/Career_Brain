@@ -52,7 +52,7 @@ def initialize_brain():
         "Be professional, confident, and helpful."
     )
     
-    return index.as_query_engine(system_prompt=system_prompt, similarity_top_k=5)
+    return index.as_query_engine(system_prompt=system_prompt, similarity_top_k=5,streaming=True)
 
 # --- THIS IS THE KEY CHANGE ---
 with st.spinner("🧠 Waking up the brain... this may take a moment."):
@@ -73,17 +73,21 @@ if prompt := st.chat_input("What would you like to know about Paul?"):
         st.markdown(prompt)
 
     with st.chat_message("assistant"):
+    # This now returns a StreamingResponse object
         response_stream = query_engine.query(prompt)
-        # This will 'stream' the text to the UI as it's generated
-        st.write_stream(response_stream.response_gen) 
-        st.session_state.messages.append({"role": "assistant", "content": str(response_stream)})
+        
+        # st.write_stream iterates through the response_gen for you
+        full_response = st.write_stream(response_stream.response_gen)
+        
+        # Save the full string to your session history
+        st.session_state.messages.append({"role": "assistant", "content": full_response})
 
         
 with st.sidebar:
     st.image("https://github.com/PTucc327.png") # Pulls your GitHub profile pic automatically!
     st.title("Paul Tuccinardi")
     st.markdown("📍 **Location:** Stamford, CT")
-    st.markdown("🔗 [LinkedIn](https://www.linkedin.com/in/paultuccinardi/)")
+    st.markdown("🔗 [LinkedIn](https://www.linkedin.com/in/paul-tuccinardi/)")
     st.markdown("💻 [GitHub](https://github.com/PTucc327)")
     
     # Add a download button for your actual PDF
