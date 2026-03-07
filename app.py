@@ -1,100 +1,129 @@
 import streamlit as st
 import os
+import requests
+import urllib.parse
 from dotenv import load_dotenv
 from llama_index.core import VectorStoreIndex, Settings, SimpleDirectoryReader
 from llama_index.llms.ollama import Ollama
 from llama_index.embeddings.ollama import OllamaEmbedding
 from llama_index.readers.github import GithubRepositoryReader, GithubClient
+from llama_index.core.memory import ChatMemoryBuffer
+from streamlit_mic_recorder import speech_to_text
 
-# 1. Page Configuration
-st.set_page_config(page_title="Paul's Career Brain", page_icon="🤖", layout="centered")
-st.title("🤖 Paul's Career Brain")
-st.markdown("Ask me anything about Paul's technical projects and experience.")
+# 1. Page Config
+st.set_page_config(page_title="Paul's Career Brain", page_icon="🤖", layout="wide")
 
-# 2. Setup Local AI & Data (Cached)
 @st.cache_resource
 def initialize_brain():
     load_dotenv()
+    github_token = os.getenv("GITHUB_TOKEN")
+    github_username = "PTucc327"
+    paul_email = "your-email@example.com" # UPDATE THIS
     
-    # Memory-optimized settings
-    Settings.llm = Ollama(model="llama3.2:1b", request_timeout=120.0, additional_kwargs={"keep_alive": 0})
-    Settings.embed_model = OllamaEmbedding(model_name="nomic-embed-text", additional_kwargs={"keep_alive": 0})
+    # --- GitHub Data Fetching ---
+    headers = {"Authorization": f"token {github_token}"}
+    all_repos_raw = requests.get(f"https://api.github.com/users/{github_username}/repos?per_page=100", headers=headers).json()
     
-    # Load Resume
-    resume_reader = SimpleDirectoryReader("./data")
-    resume_docs = resume_reader.load_data()
+    query = """{ user(login: "%s") { pinnedItems(first: 6, types: REPOSITORY) { nodes { ... on Repository { name url } } } } } """ % github_username
+    try:
+        gql_res = requests.post("https://api.github.com/graphql", json={'query': query}, headers={"Authorization": f"Bearer {github_token}"}).json()
+        pinned_names = [node['name'] for node in gql_res['data']['user']['pinnedItems']['nodes']]
+    except: pinned_names = []
 
-    # Initialize GitHub Client
-    github_client = GithubClient(os.getenv("GITHUB_TOKEN"))
-    repos = [
-        {"owner": "PTucc327", "repo": "ChurnLens"},
-        {"owner": "PTucc327", "repo": "Job_Market_Analysis"},
-        {"owner": "PTucc327", "repo": "NFL_Pass_Rush_Play_Type_Classification"}
-    ]
+    # --- AI Setup ---
+    Settings.llm = Ollama(model="llama3.2:1b", temperature=0.1, request_timeout=120.0)
+    Settings.embed_model = OllamaEmbedding(model_name="nomic-embed-text")
+
+    # --- Document Loading ---
+    resume_docs = SimpleDirectoryReader("./data").load_data()
+    github_client = GithubClient(github_token)
+    repo_docs, processed_metadata = [], []
+
+    for r in all_repos_raw:
+        if r["fork"] or r["name"].startswith("."): continue
+        processed_metadata.append({"name": r["name"], "url": r["html_url"], "desc": r["description"], "is_pinned": r["name"] in pinned_names})
+        try:
+            loader = GithubRepositoryReader(github_client, owner=github_username, repo=r["name"], filter_file_extensions=([".py", ".ipynb", ".md"], GithubRepositoryReader.FilterType.INCLUDE))
+            repo_docs.extend(loader.load_data(branch=r["default_branch"]))
+        except: continue
+
+    index = VectorStoreIndex.from_documents(resume_docs + repo_docs)
     
-    repo_docs = []
-    for repo in repos:
-        loader = GithubRepositoryReader(
-            github_client, owner=repo["owner"], repo=repo["repo"],
-            filter_file_extensions=([".py", ".ipynb", ".md"], GithubRepositoryReader.FilterType.INCLUDE),
-            verbose=True 
+    # --- Chat Engine with Persona & Memory ---
+    memory = ChatMemoryBuffer.from_defaults(token_limit=2000)
+    chat_engine = index.as_chat_engine(
+        chat_mode="context",
+        memory=memory,
+        system_prompt=(
+            f"You are Paul Tuccinardi's AI double. Paul's email is {paul_email}.\n"
+            "If a user wants to contact Paul or mentions an interview, draft a professional email for them.\n"
+            "Keep it short, using context from Paul's GitHub and Resume.\n"
+            "When drafting, start your response with 'DRAFT:' so the UI can detect it."
         )
-        repo_docs.extend(loader.load_data(branch="main"))
-    
-    all_docs = resume_docs + repo_docs
-    index = VectorStoreIndex.from_documents(all_docs)
-    
-    # Setup the prompt inside the engine
-    system_prompt = (
-        "You are the AI version of Paul Tuccinardi's Career Brain. "
-        "Your goal is to represent Paul to recruiters. Use the provided context to answer questions specifically. "
-        "Mention specific libraries like sklearn, selenium, or pandas if found in his code. "
-        "Be professional, confident, and helpful."
     )
+    return chat_engine, processed_metadata, paul_email
+
+with st.spinner("🧠 Syncing Paul's Neural Network..."):
+    chat_engine, repo_metadata, PAUL_EMAIL = initialize_brain()
+
+# --- SIDEBAR UI ---
+with st.sidebar:
+    st.image("https://github.com/PTucc327.png", width=120)
+    st.title("Paul Tuccinardi")
+    st.write("📍 Stamford, CT | 🚀 Data Scientist & Data Analyst")
     
-    return index.as_query_engine(system_prompt=system_prompt, similarity_top_k=5,streaming=True)
+    c1, c2 = st.columns(2)
+    with c1: st.link_button("LinkedIn", "https://linkedin.com/in/paultuccinardi/", use_container_width=True)
+    with c2: st.link_button("GitHub", "https://github.com/PTucc327", use_container_width=True)
 
-# --- THIS IS THE KEY CHANGE ---
-with st.spinner("🧠 Waking up the brain... this may take a moment."):
-    # We call the function and save the result into 'query_engine'
-    query_engine = initialize_brain() 
+    st.markdown("---")
+    st.subheader("📌 Featured Projects")
+    for repo in [r for r in repo_metadata if r["is_pinned"]]:
+        with st.expander(f"**{repo['name'].replace('_', ' ')}**"):
+            st.caption(repo['desc'] or "Technical deep-dive.")
+            st.page_link(repo['url'], label="Source Code", icon="🔗")
 
-# 3. Chat Interface
-if "messages" not in st.session_state:
-    st.session_state.messages = []
+# --- MAIN CHAT ---
+st.title("🤖 Paul's Career Brain")
 
-for message in st.session_state.messages:
+if "chat_history" not in st.session_state:
+    st.session_state.chat_history = []
+
+# Display history
+for message in st.session_state.chat_history:
     with st.chat_message(message["role"]):
         st.markdown(message["content"])
 
-if prompt := st.chat_input("What would you like to know about Paul?"):
-    st.session_state.messages.append({"role": "user", "content": prompt})
-    with st.chat_message("user"):
-        st.markdown(prompt)
+# Multi-modal Input
+col_v, col_t = st.columns([0.1, 0.9])
+with col_v: v_input = speech_to_text(language='en', start_prompt="🎤", stop_prompt="⏹️", just_once=True, key='STT')
+with col_t: t_input = st.chat_input("Ask about my NFL projects, Pace University, or draft an email...")
+
+prompt = v_input if v_input else t_input
+
+if prompt:
+    st.session_state.chat_history.append({"role": "user", "content": prompt})
+    with st.chat_message("user"): st.markdown(prompt)
 
     with st.chat_message("assistant"):
-    # This now returns a StreamingResponse object
-        response_stream = query_engine.query(prompt)
+        response = chat_engine.chat(prompt).response
+        st.markdown(response)
         
-        # st.write_stream iterates through the response_gen for you
-        full_response = st.write_stream(response_stream.response_gen)
-        
-        # Save the full string to your session history
-        st.session_state.messages.append({"role": "assistant", "content": full_response})
+        # --- NEW: Email Drafting Logic ---
+        if "DRAFT:" in response.upper():
+            # Clean the response for the email body
+            body_text = response.replace("DRAFT:", "").strip()
+            subject = "Reaching out regarding Paul's Portfolio"
+            
+            # Encode for mailto URL
+            mailto_url = f"mailto:{PAUL_EMAIL}?subject={urllib.parse.quote(subject)}&body={urllib.parse.quote(body_text)}"
+            
+            st.markdown(f"""
+                <a href="{mailto_url}" target="_blank">
+                    <button style="background-color: #ff4b4b; color: white; border: none; padding: 10px 20px; border-radius: 5px; cursor: pointer;">
+                        📧 Open in Email Client
+                    </button>
+                </a>
+            """, unsafe_allow_html=True)
 
-        
-with st.sidebar:
-    st.image("https://github.com/PTucc327.png") # Pulls your GitHub profile pic automatically!
-    st.title("Paul Tuccinardi")
-    st.markdown("📍 **Location:** Stamford, CT")
-    st.markdown("🔗 [LinkedIn](https://www.linkedin.com/in/paul-tuccinardi/)")
-    st.markdown("💻 [GitHub](https://github.com/PTucc327)")
-    
-    # Add a download button for your actual PDF
-    with open("./data/Paul_Tuccinardi.pdf", "rb") as f:
-        st.download_button(
-            label="📄 Download My Full Resume",
-            data=f,
-            file_name="Paul_Tuccinardi_Resume.pdf",
-            mime="application/pdf"
-        )
+        st.session_state.chat_history.append({"role": "assistant", "content": response})
