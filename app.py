@@ -7,6 +7,7 @@ from llama_index.core import VectorStoreIndex, Settings, SimpleDirectoryReader
 from llama_index.llms.ollama import Ollama
 from llama_index.embeddings.ollama import OllamaEmbedding
 from llama_index.readers.github import GithubRepositoryReader, GithubClient
+from llama_index.readers.web import BeautifulSoupWebReader
 from llama_index.core.memory import ChatMemoryBuffer
 from streamlit_mic_recorder import speech_to_text
 
@@ -18,7 +19,8 @@ def initialize_brain():
     load_dotenv()
     github_token = os.getenv("GITHUB_TOKEN")
     github_username = "PTucc327"
-    paul_email = "your-email@example.com" # UPDATE THIS
+    paul_email = "paultuccinardi@gmail.com"
+    linkedin_url = "https://www.linkedin.com/in/paultuccinardi/" # Your profile
     
     # --- GitHub Data Fetching ---
     headers = {"Authorization": f"token {github_token}"}
@@ -30,12 +32,20 @@ def initialize_brain():
         pinned_names = [node['name'] for node in gql_res['data']['user']['pinnedItems']['nodes']]
     except: pinned_names = []
 
-    # --- AI Setup ---
+    # --- AI Setup (Ollama) ---
     Settings.llm = Ollama(model="llama3.2:1b", temperature=0.1, request_timeout=120.0)
     Settings.embed_model = OllamaEmbedding(model_name="nomic-embed-text")
 
-    # --- Document Loading ---
+    # --- DATA LOADING ---
+    # A. Resume
     resume_docs = SimpleDirectoryReader("./data").load_data()
+    
+    # B. LinkedIn (Public Profile Reader)
+    # Note: This works best if your profile visibility is set to 'Public'
+    web_reader = BeautifulSoupWebReader()
+    linkedin_docs = web_reader.load_data(urls=[linkedin_url])
+    
+    # C. GitHub Code
     github_client = GithubClient(github_token)
     repo_docs, processed_metadata = [], []
 
@@ -47,7 +57,9 @@ def initialize_brain():
             repo_docs.extend(loader.load_data(branch=r["default_branch"]))
         except: continue
 
-    index = VectorStoreIndex.from_documents(resume_docs + repo_docs)
+    # Combine all knowledge sources
+    all_docs = resume_docs + linkedin_docs + repo_docs
+    index = VectorStoreIndex.from_documents(all_docs)
     
     # --- Chat Engine with Persona & Memory ---
     memory = ChatMemoryBuffer.from_defaults(token_limit=2000)
@@ -56,14 +68,19 @@ def initialize_brain():
         memory=memory,
         system_prompt=(
             f"You are Paul Tuccinardi's AI double. Paul's email is {paul_email}.\n"
-            "If a user wants to contact Paul or mentions an interview, draft a professional email for them.\n"
-            "Keep it short, using context from Paul's GitHub and Resume.\n"
-            "When drafting, start your response with 'DRAFT:' so the UI can detect it."
+            "Identity: Paul is a recent graduate from Pace University with an M.S. in Data Science and B.S. in Computer Science.\n"
+            "Context Sources: GitHub (Code), PDF Resume (History), and LinkedIn (Professional Summary).\n\n"
+            "STRICT RULES:\n"
+            "1. If a user asks to contact Paul, draft a professional email starting with 'DRAFT:'.\n"
+            "2. Distinguish projects: GitHub projects are either Coursework or Independent Data Science projects.\n"
+            "3. Mention Pace University specifically regarding his degrees and relevant academic rigor.\n"
+            "4. For technical questions, link to the relevant GitHub URL from the context.\n"
+            "5. Keep responses concise, helpful, and professional."
         )
     )
     return chat_engine, processed_metadata, paul_email
 
-with st.spinner("🧠 Syncing Paul's Neural Network..."):
+with st.spinner("🧠 Syncing Paul's Neural Network (GitHub + Resume + LinkedIn)..."):
     chat_engine, repo_metadata, PAUL_EMAIL = initialize_brain()
 
 # --- SIDEBAR UI ---
@@ -89,15 +106,16 @@ st.title("🤖 Paul's Career Brain")
 if "chat_history" not in st.session_state:
     st.session_state.chat_history = []
 
-# Display history
 for message in st.session_state.chat_history:
     with st.chat_message(message["role"]):
         st.markdown(message["content"])
 
 # Multi-modal Input
 col_v, col_t = st.columns([0.1, 0.9])
-with col_v: v_input = speech_to_text(language='en', start_prompt="🎤", stop_prompt="⏹️", just_once=True, key='STT')
-with col_t: t_input = st.chat_input("Ask about my NFL projects, Pace University, or draft an email...")
+with col_v: 
+    v_input = speech_to_text(language='en', start_prompt="🎤", stop_prompt="⏹️", just_once=True, key='STT')
+with col_t: 
+    t_input = st.chat_input("Ask about my NFL projects, LinkedIn summary, or draft an email...")
 
 prompt = v_input if v_input else t_input
 
@@ -109,13 +127,10 @@ if prompt:
         response = chat_engine.chat(prompt).response
         st.markdown(response)
         
-        # --- NEW: Email Drafting Logic ---
+        # Email Drafting Logic
         if "DRAFT:" in response.upper():
-            # Clean the response for the email body
             body_text = response.replace("DRAFT:", "").strip()
             subject = "Reaching out regarding Paul's Portfolio"
-            
-            # Encode for mailto URL
             mailto_url = f"mailto:{PAUL_EMAIL}?subject={urllib.parse.quote(subject)}&body={urllib.parse.quote(body_text)}"
             
             st.markdown(f"""
