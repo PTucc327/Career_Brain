@@ -17,10 +17,9 @@ st.markdown("""
     """, unsafe_allow_html=True)
 
 # --- 2. Initialize Models & Settings ---
-# Note: When deploying to Streamlit Cloud, ensure your local Ollama endpoints are accessible 
-# or switch to OpenAI/Anthropic using st.secrets for production robustness.
 @st.cache_resource
 def configure_settings():
+    # request_timeout increased to 300s to prevent httpx.ReadTimeout during long RAG retrievals
     Settings.llm = Ollama(model="llama3.2:1b", request_timeout=300.0)
     Settings.embed_model = OllamaEmbedding(model_name="llama3.2:1b")
 
@@ -49,8 +48,10 @@ def initialize_brain():
             "You have full access to Paul's Resume, LinkedIn profile, and GitHub projects via your indexed data. "
             "Never say you cannot access these files. Use the provided context to answer questions about Paul's "
             "3.5 years of experience in Data Science, his M.S. from Pace University, and his projects like the NFL RAG Chatbot. "
-            "If asked for contact info: Email is paultuccinardi@gmail.com, located in Stamford, CT. Github username is PTucc327. LinkedIn is linkedin.com/in/paultuccinardi/. "
-            "Each project is its unique case study with its own unique name. Highlight technical skills, tools used, and impact. Always maintain a confident tone and provide detailed, specific answers based on the indexed data."
+            "If asked for contact info: Email is paultuccinardi@gmail.com, located in Stamford, CT. Github username is PTucc327. "
+            "LinkedIn is linkedin.com/in/paultuccinardi/ "
+            "Each project is its unique case study with its own unique name. Highlight technical skills, tools used, and impact. "
+            "Always maintain a confident tone and provide detailed, specific answers based on the indexed data."
         )
     )
     return chat_engine
@@ -59,17 +60,23 @@ chat_engine = initialize_brain()
 
 # --- 4. Sidebar UI ---
 with st.sidebar:
+    # Adding a clean header
     st.image("https://github.com/PTucc327.png")
-    st.title("Paul Tuccinardi", text_alignment="center")
-    st.caption("🚀 Data Scientist | Data Analyst | ML Engineer")
-    st.info("Ask my AI twin about my professional background, technical skills, or specific projects.")
+    st.title("Paul Tuccinardi")
+    st.text("🚀 Data Scientist | Data Analyst | ML Engineer")
+    st.text("📍 Stamford, CT ")
+    st.text("📧 paultuccinardi@gmail.com")
+    
     
     c1, c2 = st.columns(2)
-    with c1: st.link_button("LinkedIn", "https://linkedin.com/in/paultuccinardi/")
-    with c2: st.link_button("GitHub", "https://github.com/PTucc327")
+    with c1: st.link_button("LinkedIn", "https://linkedin.com/in/paultuccinardi/", use_container_width=True)
+    with c2: st.link_button("GitHub", "https://github.com/PTucc327", use_container_width=True)
+
+    st.info("Ask my AI twin about my professional background, technical skills, or specific projects.")
 
     st.divider()
-    # Ensure this file path matches your uploaded resume name
+    
+    # Ensure this file path matches your uploaded resume name exactly
     resume_path = "./data/Paul_Tuccinardi.pdf"
     if os.path.exists(resume_path):
         with open(resume_path, "rb") as f:
@@ -83,30 +90,45 @@ with st.sidebar:
     - **Job Market Analysis** (SBERT/XGBoost)
     - **Succession AI** (LLM Automation)
     """)
-    
-    
-# --- 5. Main Chat Interface ---
+
+# --- 5. Main Chat Interface (with Streaming) ---
 st.title("🤖 Career Brain")
 st.toast("Welcome! How can I help you learn more about Paul today?", icon="👋")
 
+# Initialize session state for messages
 if "messages" not in st.session_state:
     st.session_state.messages = [
-        {"role": "assistant", "content": "Hi! I'm Paul's digital twin. Ask me anything about his work at Succession AI, his NFL analytics projects, or his time at Pace University."}
+        {"role": "assistant", "content": "Hi! I'm Paul's digital twin. Ask me anything about my work at Succession AI, my NFL analytics projects, or my time at Pace University."}
     ]
 
-# Display chat history
+# Display existing chat history
 for message in st.session_state.messages:
     with st.chat_message(message["role"]):
         st.markdown(message["content"])
 
-# User Input
+# User Input Logic
 if prompt := st.chat_input("Ask me about Paul's experience..."):
+    # 1. Add user message to state and UI
     st.session_state.messages.append({"role": "user", "content": prompt})
     with st.chat_message("user"):
         st.markdown(prompt)
 
+    # 2. Generate and stream assistant response
     with st.chat_message("assistant"):
-        with st.spinner("Thinking..."):
-            response = chat_engine.chat(prompt)
-            st.markdown(response.response)
-            st.session_state.messages.append({"role": "assistant", "content": response.response})
+        response_placeholder = st.empty()
+        full_response = ""
+        
+        # Use stream_chat instead of chat for real-time output
+        streaming_response = chat_engine.stream_chat(prompt)
+        
+        # Loop through tokens as they arrive from Ollama
+        for token in streaming_response.response_gen:
+            full_response += token
+            # Show a typing cursor while streaming
+            response_placeholder.markdown(full_response + "▌")
+        
+        # Final display without the cursor
+        response_placeholder.markdown(full_response)
+        
+        # Save final response to state
+        st.session_state.messages.append({"role": "assistant", "content": full_response})
