@@ -1,144 +1,112 @@
 import streamlit as st
 import os
-import requests
-import urllib.parse
-from dotenv import load_dotenv
-from llama_index.core import VectorStoreIndex, Settings, SimpleDirectoryReader
+from llama_index.core import VectorStoreIndex, SimpleDirectoryReader, StorageContext, load_index_from_storage, Settings
 from llama_index.llms.ollama import Ollama
 from llama_index.embeddings.ollama import OllamaEmbedding
-from llama_index.readers.github import GithubRepositoryReader, GithubClient
-from llama_index.readers.web import BeautifulSoupWebReader
 from llama_index.core.memory import ChatMemoryBuffer
-from streamlit_mic_recorder import speech_to_text
 
-# 1. Page Config
+# --- 1. Page Configuration & Custom CSS ---
 st.set_page_config(page_title="Paul's Career Brain", page_icon="🤖", layout="wide")
 
+st.markdown("""
+    <style>
+    .main { background-color: #f5f7f9; }
+    .stButton>button { width: 100%; border-radius: 5px; height: 3em; background-color: #0078D4; color: white; }
+    .stDownloadButton>button { width: 100%; border-radius: 5px; background-color: #28a745; color: white; }
+    </style>
+    """, unsafe_allow_html=True)
+
+# --- 2. Initialize Models & Settings ---
+# Note: When deploying to Streamlit Cloud, ensure your local Ollama endpoints are accessible 
+# or switch to OpenAI/Anthropic using st.secrets for production robustness.
+@st.cache_resource
+def configure_settings():
+    Settings.llm = Ollama(model="llama3.2:1b", request_timeout=300.0)
+    Settings.embed_model = OllamaEmbedding(model_name="llama3.2:1b")
+
+configure_settings()
+
+# --- 3. Data Ingestion & Brain Initialization ---
 @st.cache_resource
 def initialize_brain():
-    load_dotenv()
-    github_token = os.getenv("GITHUB_TOKEN")
-    github_username = "PTucc327"
-    paul_email = "paultuccinardi@gmail.com"
-    linkedin_url = "https://www.linkedin.com/in/paultuccinardi/" # Your profile
-    
-    # --- GitHub Data Fetching ---
-    headers = {"Authorization": f"token {github_token}"}
-    all_repos_raw = requests.get(f"https://api.github.com/users/{github_username}/repos?per_page=100", headers=headers).json()
-    
-    query = """{ user(login: "%s") { pinnedItems(first: 6, types: REPOSITORY) { nodes { ... on Repository { name url } } } } } """ % github_username
-    try:
-        gql_res = requests.post("https://api.github.com/graphql", json={'query': query}, headers={"Authorization": f"Bearer {github_token}"}).json()
-        pinned_names = [node['name'] for node in gql_res['data']['user']['pinnedItems']['nodes']]
-    except: pinned_names = []
+    # Load documents from your /data folder (Resume, LinkedIn text, etc.)
+    if not os.path.exists("./data"):
+        st.error("Data folder not found. Please ensure your PDF and text files are in the /data directory.")
+        return None
 
-    # --- AI Setup (Ollama) ---
-    Settings.llm = Ollama(model="llama3.2:1b", temperature=0.1, request_timeout=120.0)
-    Settings.embed_model = OllamaEmbedding(model_name="nomic-embed-text")
-
-    # --- DATA LOADING ---
-    # A. Resume
-    resume_docs = SimpleDirectoryReader("./data").load_data()
+    documents = SimpleDirectoryReader("./data").load_data()
+    index = VectorStoreIndex.from_documents(documents)
     
-    # B. LinkedIn (Public Profile Reader)
-    # Note: This works best if your profile visibility is set to 'Public'
-    web_reader = BeautifulSoupWebReader()
-    linkedin_docs = web_reader.load_data(urls=[linkedin_url])
+    # Initialize Memory
+    memory = ChatMemoryBuffer.from_defaults(token_limit=1500)
     
-    # C. GitHub Code
-    github_client = GithubClient(github_token)
-    repo_docs, processed_metadata = [], []
-
-    for r in all_repos_raw:
-        if r["fork"] or r["name"].startswith("."): continue
-        processed_metadata.append({"name": r["name"], "url": r["html_url"], "desc": r["description"], "is_pinned": r["name"] in pinned_names})
-        try:
-            loader = GithubRepositoryReader(github_client, owner=github_username, repo=r["name"], filter_file_extensions=([".py", ".ipynb", ".md"], GithubRepositoryReader.FilterType.INCLUDE))
-            repo_docs.extend(loader.load_data(branch=r["default_branch"]))
-        except: continue
-
-    # Combine all knowledge sources
-    all_docs = resume_docs + linkedin_docs + repo_docs
-    index = VectorStoreIndex.from_documents(all_docs)
-    
-    # --- Chat Engine with Persona & Memory ---
-    memory = ChatMemoryBuffer.from_defaults(token_limit=2000)
+    # Create Chat Engine with the "Persona" instruction
     chat_engine = index.as_chat_engine(
         chat_mode="context",
         memory=memory,
         system_prompt=(
-            f"You are Paul Tuccinardi's AI double. Paul's email is {paul_email}.\n"
-            "Identity: Paul is a recent graduate from Pace University with an M.S. in Data Science and B.S. in Computer Science.\n"
-            "Context Sources: GitHub (Code), PDF Resume (History), and LinkedIn (Professional Summary).\n\n"
-            "STRICT RULES:\n"
-            "1. If a user asks to contact Paul, draft a professional email starting with 'DRAFT:'.\n"
-            "2. Distinguish projects: GitHub projects are either Coursework or Independent Data Science projects.\n"
-            "3. Mention Pace University specifically regarding his degrees and relevant academic rigor.\n"
-            "4. For technical questions, link to the relevant GitHub URL from the context.\n"
-            "5. Keep responses concise, helpful, and professional."
+            "You are Paul Tuccinardi's AI representative. You are confident and professional. "
+            "You have full access to Paul's Resume, LinkedIn profile, and GitHub projects via your indexed data. "
+            "Never say you cannot access these files. Use the provided context to answer questions about Paul's "
+            "3.5 years of experience in Data Science, his M.S. from Pace University, and his projects like the NFL RAG Chatbot. "
+            "If asked for contact info: Email is paultuccinardi@gmail.com, located in Stamford, CT. Github username is PTucc327. LinkedIn is linkedin.com/in/paultuccinardi/. "
+            "Each project is its unique case study with its own unique name. Highlight technical skills, tools used, and impact. Always maintain a confident tone and provide detailed, specific answers based on the indexed data."
         )
     )
-    return chat_engine, processed_metadata, paul_email
+    return chat_engine
 
-with st.spinner("🧠 Syncing Paul's Neural Network (GitHub + Resume + LinkedIn)..."):
-    chat_engine, repo_metadata, PAUL_EMAIL = initialize_brain()
+chat_engine = initialize_brain()
 
-# --- SIDEBAR UI ---
+# --- 4. Sidebar UI ---
 with st.sidebar:
-    st.image("https://github.com/PTucc327.png", width=120)
-    st.title("Paul Tuccinardi")
-    st.write("📍 Stamford, CT | 🚀 Data Scientist & Data Analyst")
+    st.image("https://github.com/PTucc327.png")
+    st.title("Paul Tuccinardi", text_alignment="center")
+    st.caption("🚀 Data Scientist | Data Analyst | ML Engineer")
+    st.info("Ask my AI twin about my professional background, technical skills, or specific projects.")
     
     c1, c2 = st.columns(2)
-    with c1: st.link_button("LinkedIn", "https://linkedin.com/in/paultuccinardi/", use_container_width=True)
-    with c2: st.link_button("GitHub", "https://github.com/PTucc327", use_container_width=True)
+    with c1: st.link_button("LinkedIn", "https://linkedin.com/in/paultuccinardi/")
+    with c2: st.link_button("GitHub", "https://github.com/PTucc327")
 
-    st.markdown("---")
-    st.subheader("📌 Featured Projects")
-    for repo in [r for r in repo_metadata if r["is_pinned"]]:
-        with st.expander(f"**{repo['name'].replace('_', ' ')}**"):
-            st.caption(repo['desc'] or "Technical deep-dive.")
-            st.page_link(repo['url'], label="Source Code", icon="🔗")
+    st.divider()
+    # Ensure this file path matches your uploaded resume name
+    resume_path = "./data/Paul_Tuccinardi.pdf"
+    if os.path.exists(resume_path):
+        with open(resume_path, "rb") as f:
+            st.download_button("📄 Download Resume", f, file_name="Paul_Tuccinardi_Resume.pdf", mime="application/pdf")
 
-# --- MAIN CHAT ---
-st.title("🤖 Paul's Career Brain")
+    st.divider()
+    st.subheader("🎯 Featured Topics")
+    st.markdown("""
+    - **NFL Chatbot** (LlamaIndex/Pinecone)
+    - **Fitbit Dashboard** (Sensor Data)
+    - **Job Market Analysis** (SBERT/XGBoost)
+    - **Succession AI** (LLM Automation)
+    """)
+    
+    
+# --- 5. Main Chat Interface ---
+st.title("🤖 Career Brain")
+st.toast("Welcome! How can I help you learn more about Paul today?", icon="👋")
 
-if "chat_history" not in st.session_state:
-    st.session_state.chat_history = []
+if "messages" not in st.session_state:
+    st.session_state.messages = [
+        {"role": "assistant", "content": "Hi! I'm Paul's digital twin. Ask me anything about his work at Succession AI, his NFL analytics projects, or his time at Pace University."}
+    ]
 
-for message in st.session_state.chat_history:
+# Display chat history
+for message in st.session_state.messages:
     with st.chat_message(message["role"]):
         st.markdown(message["content"])
 
-# Multi-modal Input
-col_v, col_t = st.columns([0.1, 0.9])
-with col_v: 
-    v_input = speech_to_text(language='en', start_prompt="🎤", stop_prompt="⏹️", just_once=True, key='STT')
-with col_t: 
-    t_input = st.chat_input("Ask about my NFL projects, LinkedIn summary, or draft an email...")
-
-prompt = v_input if v_input else t_input
-
-if prompt:
-    st.session_state.chat_history.append({"role": "user", "content": prompt})
-    with st.chat_message("user"): st.markdown(prompt)
+# User Input
+if prompt := st.chat_input("Ask me about Paul's experience..."):
+    st.session_state.messages.append({"role": "user", "content": prompt})
+    with st.chat_message("user"):
+        st.markdown(prompt)
 
     with st.chat_message("assistant"):
-        response = chat_engine.chat(prompt).response
-        st.markdown(response)
-        
-        # Email Drafting Logic
-        if "DRAFT:" in response.upper():
-            body_text = response.replace("DRAFT:", "").strip()
-            subject = "Reaching out regarding Paul's Portfolio"
-            mailto_url = f"mailto:{PAUL_EMAIL}?subject={urllib.parse.quote(subject)}&body={urllib.parse.quote(body_text)}"
-            
-            st.markdown(f"""
-                <a href="{mailto_url}" target="_blank">
-                    <button style="background-color: #ff4b4b; color: white; border: none; padding: 10px 20px; border-radius: 5px; cursor: pointer;">
-                        📧 Open in Email Client
-                    </button>
-                </a>
-            """, unsafe_allow_html=True)
-
-        st.session_state.chat_history.append({"role": "assistant", "content": response})
+        with st.spinner("Thinking..."):
+            response = chat_engine.chat(prompt)
+            st.markdown(response.response)
+            st.session_state.messages.append({"role": "assistant", "content": response.response})

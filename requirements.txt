@@ -1,0 +1,8 @@
+streamlit
+llama-index
+llama-index-llms-ollama
+llama-index-embeddings-ollama
+llama-index-readers-github
+llama-index-readers-web
+streamlit-mic-recorder
+python-dotenv
