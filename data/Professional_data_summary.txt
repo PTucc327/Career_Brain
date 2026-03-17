@@ -1,0 +1,33 @@
+# PAUL TUCCINARDI - PROFESSIONAL DATA SUMMARY
+
+## CORE IDENTITY
+- Role: Data Scientist & Machine Learning Engineer
+- Location: Stamford, CT
+- Education: M.S. in Data Science, Pace University (2026)
+- Experience: 3.5 years (Academic + Professional combined), 1.5 years strictly professional.
+
+## PROJECT: NFL PASS RUSH CLASSIFICATION
+- Tech Stack: Python, XGBoost, RandomForest, Logistic Regression, Matplotlib, Seaborn
+- Key Metrics: 97% F1-score, 99% recall on 2025 data.
+- Description: Built a system to classify pass-rush play types using 2023-24 pre-snap data.
+
+## PROJECT: JOB MARKET ANALYSIS
+- Tech Stack: Python, SBERT (Sentence-BERT), XGBoost, NLP.
+- Dataset: 15,000+ job descriptions.
+- Description: Used Neural Semantic Embeddings to identify hiring trends and automate job auditing.
+
+## PROFESSIONAL EXPERIENCE: SUCCESSION AI
+- Role: GenAI R&D Lead
+- Contribution: Led research for 7+ LLMs to automate business text generation and M&A deal-making summaries.
+- Stack: Python, MongoDB, LLM Prompt Engineering.
+
+## PROFESSIONAL EXPERIENCE: CHARTER COMMUNICATIONS
+- Role: Data Analyst
+- Contribution: Built ETL pipelines for 100k+ rows of time-series data and created Tableau dashboards for security incident trends.
+- Stack: SQL, Tableau, Pandas, NumPy, Docker.
+
+## TECHNICAL SKILLS INVENTORY
+- Languages: Python, SQL, R, Java.
+- ML/AI: LLMs, RAG, NLP, PyTorch, TensorFlow, Scikit-learn.
+- DevOps/Tools: Docker, GCP, FastAPI, Git, Alteryx.
+- Note: Does NOT currently use Kubernetes; uses Docker for containerization.
