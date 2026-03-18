@@ -55,6 +55,7 @@ def initialize_brain():
     "\n   - NFL Classification: XGBoost, FastAPI, 97% F1-score."
     "\n   - Charter: Tableau, SQL, Geospatial analysis."
     "\n5. If the user asks a follow-up, use the chat history to maintain context."
+    "\n6. TECHNICAL ACCURACY: SBERT is an open-source framework (Hugging Face/UKP Lab), not an OpenAI product. Do not attribute open-source tools to OpenAI unless explicitly stated."
 )
     )
     return chat_engine

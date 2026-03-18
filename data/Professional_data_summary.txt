@@ -1,33 +1,32 @@
-# PAUL TUCCINARDI - PROFESSIONAL DATA SUMMARY
+# PAUL TUCCINARDI - AUTHORITATIVE DATA SHEET
 
-## CORE IDENTITY
-- Role: Data Scientist & Machine Learning Engineer
-- Location: Stamford, CT
-- Education: M.S. in Data Science, Pace University (2026)
-- Experience: 3.5 years (Academic + Professional combined), 1.5 years strictly professional.
+## EXPERIENCE TOTALS
+- TOTAL RELEVANT EXPERIENCE: 3.5 Years (Total sum).
+- PROFESSIONAL TENURE: 1.5 Years (Included in the 3.5 total).
+- ACADEMIC/PROJECT TENURE: 2.0 Years (Included in the 3.5 total).
 
 ## PROJECT: NFL PASS RUSH CLASSIFICATION
-- Tech Stack: Python, XGBoost, RandomForest, Logistic Regression, Matplotlib, Seaborn
-- Key Metrics: 97% F1-score, 99% recall on 2025 data.
-- Description: Built a system to classify pass-rush play types using 2023-24 pre-snap data.
+- TECH: Python, XGBoost, Scikit-learn.
+- METRICS: 97% F1-score and 99% Recall.
+- EXCLUSIONS: Does NOT use FastAPI. Does NOT use SBERT.
 
 ## PROJECT: JOB MARKET ANALYSIS
-- Tech Stack: Python, SBERT (Sentence-BERT), XGBoost, NLP.
-- Dataset: 15,000+ job descriptions.
-- Description: Used Neural Semantic Embeddings to identify hiring trends and automate job auditing.
+- DATA: 15,000+ job descriptions.
+- TECH: SBERT (Sentence-BERT), XGBoost, Python.
+- METRICS: Focused on Clustering and Trend Analysis. (No F1-score is recorded for this project).
+- SBERT DETAILS: SBERT is an open-source framework based on BERT and Hugging Face Transformers. It is NOT an OpenAI product.
+- SBERT ORIGIN: Created by Nils Reimers and Iryna Gurevych (UKP Lab). 
+- OPEN SOURCE: It is a community-driven project, NOT developed by OpenAI.
 
-## PROFESSIONAL EXPERIENCE: SUCCESSION AI
-- Role: GenAI R&D Lead
-- Contribution: Led research for 7+ LLMs to automate business text generation and M&A deal-making summaries.
-- Stack: Python, MongoDB, LLM Prompt Engineering.
+## PROJECT: CAREER BRAIN (THE CURRENT APP)
+- TECH: LlamaIndex, Ollama, Streamlit, FastAPI.
 
-## PROFESSIONAL EXPERIENCE: CHARTER COMMUNICATIONS
-- Role: Data Analyst
-- Contribution: Built ETL pipelines for 100k+ rows of time-series data and created Tableau dashboards for security incident trends.
-- Stack: SQL, Tableau, Pandas, NumPy, Docker.
+## SKILLS & TOOLS
+- CLOUD: GCP (Google Cloud Platform).
+- DEVOPS: Docker (Expert). 
+- EXCLUSIONS: Paul does NOT use Kubernetes.
 
-## TECHNICAL SKILLS INVENTORY
-- Languages: Python, SQL, R, Java.
-- ML/AI: LLMs, RAG, NLP, PyTorch, TensorFlow, Scikit-learn.
-- DevOps/Tools: Docker, GCP, FastAPI, Git, Alteryx.
-- Note: Does NOT currently use Kubernetes; uses Docker for containerization.
+## PERSONAL PHILOSOPHY & MOTTO
+- Motto: "Good, Better, Best."
+- Origin: 10+ years of Taekwondo practice.
+- Application: Paul applies a mindset of iterative improvement to his engineering. The first attempt is "good," the second is "better," and the third is "best." He treats every project as a cycle of constant refinement.
