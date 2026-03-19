@@ -1,4 +1,4 @@
-# 🧠 Paul's AI Career Brain (Local RAG Pipeline)
+# 🧠 Career Brain (Local RAG Pipeline)
 
 An interactive, local AI agent capable of answering technical questions about my professional experience and codebase. This project uses **Retrieval-Augmented Generation (RAG)** to provide grounded, accurate responses based on my actual work history.
 
